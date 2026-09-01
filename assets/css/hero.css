@@ -154,7 +154,8 @@
   backface-visibility:hidden;
 }
 
-/* L1 — atmosphere: studio light, sage bloom, hairline ring */
+/* L1 — atmosphere: studio light only. No rotated ring: a diagonal cutting
+   across the garment is the one shape a fashion editorial never has. */
 .hero-atmos{z-index:1}
 .hero-atmos i{position:absolute;display:block;border-radius:50%}
 .hero-atmos .glow{
@@ -168,17 +169,6 @@
   background:radial-gradient(circle at 50% 60%,rgba(168,149,111,.16),rgba(168,149,111,0) 62%);
   transform:translate3d(6%,10%,0);
 }
-.hero-atmos .ring{
-  width:min(86%,600px);height:min(40%,270px);
-  border:1px solid rgba(97,116,105,.32);
-  transform:rotate(-11deg);
-}
-.hero-atmos .ring::after{
-  content:"";position:absolute;left:14%;top:14%;
-  width:9px;height:9px;border-radius:50%;background:var(--gold);
-  box-shadow:0 0 18px rgba(168,149,111,.8);
-}
-
 /* the thread→fabric→garment canvas sits between atmosphere and product */
 .hero-weave{
   position:absolute;inset:0;width:100%;height:100%;
@@ -342,41 +332,65 @@
   .hero{padding-bottom:6px}
   .hero-grid{
     min-height:calc(100svh - 92px);
-    padding:18px 0 max(18px,env(safe-area-inset-bottom));
-    row-gap:2px;
+    padding:22px 0 max(18px,env(safe-area-inset-bottom));
+    row-gap:0;
   }
-  .hero .eyebrow{font-size:.66rem;letter-spacing:.2em}
+
+  /* Editorial masthead: a hairline, a small tracked-out kicker, then the
+     headline with nothing competing against it. */
+  .hero .eyebrow{
+    font-size:.62rem;letter-spacing:.26em;gap:10px;
+    color:#6d7c75;
+  }
+  .hero .eyebrow::before{width:20px}
   .hero-title{
-    /* two lines, not four: the product is the subject, the type frames it */
-    font-size:clamp(2rem,10.2vw,3.1rem);
+    font-size:clamp(2rem,9.6vw,3rem);
     line-height:.94;
-    letter-spacing:-.04em;
-    margin:12px 0 0;
+    letter-spacing:-.045em;
+    margin:16px 0 0;
+    margin-left:-.015em;          /* optical alignment of the cap stem */
   }
+  .hero-title em{color:#8b9c92}
+
+  /* One tight sentence, not a paragraph. The product carries the rest. */
   .hero-sub{
-    font-size:.94rem;line-height:1.62;color:#54655e;
+    font-size:.88rem;line-height:1.58;color:#5b6b64;
+    max-width:34ch;
     margin-top:14px;
-    /* keep the paragraph to three tidy lines so the CTA never gets pushed */
-    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   }
+
   .hero-art{
-    --art:min(84vw,38svh);
-    margin:4px -12px 0;           /* let the product breathe past the gutter */
+    --art:min(80vw,34svh);
+    margin:6px -12px 0;          /* let the product breathe past the gutter */
   }
-  .hero-cta{gap:10px;margin-top:18px}
-  .hero-cta .pill{flex:1 1 auto;text-align:center;padding:15px 18px;font-size:.78rem}
+
+  /* Primary reads first and owns the row; the secondary is a quiet companion. */
+  .hero-cta{gap:9px;margin-top:17px}
+  .hero-cta .pill{padding:15px 16px;font-size:.73rem;letter-spacing:.07em;white-space:nowrap}
+  .hero-cta .pill.dark{flex:1 1 auto}
+  .hero-cta .pill.ghost{flex:0 1 auto;background:transparent;border-color:rgba(24,50,46,.2)}
+
+  /* Spec strip as a garment tag: hairline columns, tracked-out labels. */
   .hero-spec{
-    margin-top:20px;padding-top:16px;
-    gap:10px;
+    margin-top:18px;padding-top:14px;
+    gap:0;
   }
-  .hero-spec small{font-size:.68rem}
+  .hero-spec > div{padding-left:12px;border-left:1px solid var(--line)}
+  .hero-spec > div:first-child{padding-left:0;border-left:0}
+  .hero-spec b{font-size:.92rem;letter-spacing:-.005em}
+  .hero-spec small{
+    font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;
+    margin-top:5px;color:#78877f;
+  }
+
   .hero-chip{right:10px;bottom:0;padding:9px 13px 9px 10px}
   .hero-chip b{font-size:.72rem}
   .hero-motes i{opacity:.7}
 }
 
 @media(max-width:390px){
-  .hero-title{font-size:clamp(2.35rem,12.4vw,3.4rem)}
+  .hero-title{font-size:clamp(2rem,10.4vw,2.9rem)}
   .hero-chip .go{display:none}
 }
 
@@ -414,4 +428,54 @@
 [data-reveal].in{opacity:1;transform:none;will-change:auto}
 @media(prefers-reduced-motion:reduce){
   [data-reveal]{opacity:1;transform:none;transition:none}
+}
+
+/* =========================================================================
+   NARRATIVE RAIL
+   One thread running the length of the page. It is not decoration: the fill
+   is the reader's position in the story, and the four marks are the four
+   chapters the page actually has, in the order it actually has them.
+   ========================================================================= */
+
+.rail{
+  position:fixed;left:max(14px,env(safe-area-inset-left));top:0;bottom:0;z-index:40;
+  display:flex;align-items:center;gap:18px;
+  pointer-events:none;
+}
+.rail-track{
+  position:relative;width:1px;height:min(58vh,460px);
+  background:linear-gradient(180deg,transparent,var(--line) 12%,var(--line) 88%,transparent);
+}
+.rail-fill{
+  position:absolute;inset:0;transform-origin:top;
+  transform:scaleY(var(--rail,0));
+  background:linear-gradient(180deg,rgba(24,50,46,.75),var(--gold));
+  will-change:transform;
+}
+.rail-marks{
+  list-style:none;margin:0;padding:0;
+  display:flex;flex-direction:column;justify-content:space-between;
+  height:min(58vh,460px);
+}
+.rail-marks li{
+  display:flex;align-items:baseline;gap:9px;
+  font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);opacity:.42;
+  transition:opacity .5s var(--hero-ease),color .5s var(--hero-ease);
+}
+.rail-marks b{font-family:"Space Grotesk",Inter,sans-serif;font-size:.6rem;color:var(--gold)}
+.rail-marks li.on{opacity:1;color:var(--ink)}
+
+/* Below the widescreen breakpoint the labels would crowd the page, so the
+   thread continues on its own — still the same single line, still tracking. */
+@media(max-width:1180px){
+  .rail-marks{display:none}
+  .rail{left:8px}
+}
+@media(max-width:650px){
+  .rail{left:4px}
+  .rail-track{height:44vh}
+}
+@media(prefers-reduced-motion:reduce){
+  .rail-fill{transition:none}
 }
