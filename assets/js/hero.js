@@ -196,14 +196,20 @@
     var fib = [];
 
     for (var i = 0; i < FIBRES; i++) {
+      var u0 = Math.random() * 0.5;
       fib.push({
-        a: Math.random() * Math.PI * 2,          // phase
-        r: 0.22 + Math.random() * 0.72,          // radial position
-        s: 0.35 + Math.random() * 0.9,           // speed
-        z: 0.4 + Math.random() * 0.6,            // depth → width + alpha
-        o: Math.random() * Math.PI * 2
+        // Three incommensurate frequencies per fibre. One sine reads as a wave;
+        // layered octaves at these ratios read as a filament with real curl.
+        f1: 3.2 + Math.random() * 2.4, p1: Math.random() * 6.28,
+        f2: 8.6 + Math.random() * 4.1, p2: Math.random() * 6.28,
+        f3: 17.4 + Math.random() * 6.0, p3: Math.random() * 6.28,
+        r: 0.18 + Math.random() * 0.74,          // how far off the spine it sits
+        s: 0.30 + Math.random() * 0.75,          // drift speed
+        z: 0.32 + Math.random() * 0.68,          // depth: width, opacity, speed
+        u0: u0, u1: u0 + 0.42 + Math.random() * 0.58   // fibres have ends
       });
     }
+    fib.sort(function (a, b) { return a.z - b.z; });   // far fibres drawn first
 
     function noop() {} function no() { return false; } function yes() { return true; }
 
@@ -263,26 +269,52 @@
     function ease(x) { return 1 - Math.pow(1 - x, 3); }
     function span(now, a, b) { return Math.max(0, Math.min(1, (now - a) / (b - a))); }
 
-    /* One filament: a travelling sine with a lit core. `blur` draws ghost
-       passes along the direction of travel — cheap, believable motion blur. */
-    function filament(f, now, amp, alpha, blur) {
-      ctx.strokeStyle = threadGrad;               // few, long strokes: worth it
-      var cy = H * 0.5 + Math.sin(f.a + now * f.s * 0.6) * H * 0.22 * f.r;
-      var w = 0.7 + f.z * 1.5;
-      for (var g = blur; g >= 0; g--) {
-        var ga = alpha * f.z * (g === 0 ? 1 : 0.16 / g);
-        if (ga < 0.004) continue;
-        ctx.globalAlpha = ga;
-        ctx.lineWidth = w;
-        ctx.beginPath();
-        for (var i = 0; i <= 18; i++) {
-          var u = i / 18;
-          var x = u * W - g * 9;
-          var y = cy + Math.sin(u * 6.2 + f.o + now * f.s) * amp * (0.35 + f.r) +
-                  Math.sin(u * 2.1 - now * 0.4) * amp * 0.3;
-          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-        }
+    /* One fibre.
+
+       Shape: three sine octaves at incommensurate frequencies, each drifting at
+       its own rate, so the curl never repeats or reads as a waveform.
+       Depth:  z drives width, opacity and drift speed together, and the fibres
+       are depth-sorted, so near fibres pass in front of far ones.
+       Body:   three strokes — a wide soft halo (the fuzz a spun fibre carries),
+       the fibre itself, and a thin lit core along its middle, which is what
+       makes it read as a round filament catching light rather than a line.
+       Ends:   each fibre starts and stops somewhere, and tapers out at both
+       ends via the halo alone, so nothing looks cut off. */
+    function fibrePath(f, now, amp) {
+      var span = Math.min(1, f.u1) - f.u0;
+      var cy = H * (0.5 + Math.sin(f.p1 + now * f.s * 0.5) * 0.2 * f.r);
+      ctx.beginPath();
+      for (var i = 0; i <= 20; i++) {
+        var u = i / 20;
+        var t = f.u0 + u * span;
+        // taper the excursion toward both ends so the fibre settles, not stops
+        var env = Math.sin(u * Math.PI);
+        var y = cy +
+                Math.sin(t * f.f1 + f.p1 + now * f.s) * amp * 0.62 * env +
+                Math.sin(t * f.f2 - f.p2 + now * f.s * 1.7) * amp * 0.26 * env +
+                Math.sin(t * f.f3 + f.p3 - now * f.s * 2.6) * amp * 0.12 * env;
+        i ? ctx.lineTo(t * W, y) : ctx.moveTo(t * W, y);
+      }
+    }
+
+    function filament(f, now, amp, alpha, lit) {
+      var w = 0.55 + f.z * 1.35;
+      var a = alpha * (0.35 + f.z * 0.65);        // far fibres sit back
+      if (a < 0.004) return;
+
+      fibrePath(f, now, amp);
+      ctx.lineWidth = w * 3.4;                    // halo / fibre fuzz
+      ctx.globalAlpha = a * 0.16;
+      ctx.stroke();
+      ctx.lineWidth = w;                          // the fibre
+      ctx.globalAlpha = a;
+      ctx.stroke();
+      if (lit && f.z > 0.55) {                    // specular core, near fibres only
+        ctx.lineWidth = w * 0.4;
+        ctx.globalAlpha = a * 0.5;
+        ctx.strokeStyle = "rgba(247,244,232,.9)";
         ctx.stroke();
+        ctx.strokeStyle = threadGrad;
       }
     }
 
@@ -353,26 +385,32 @@
       var lift = 1 - p * 1.1;                       // fade with scroll
       if (lift <= 0) return;
 
-      // A flat stroke, not a gradient: gradient strokes are re-evaluated per
-      // pixel and this loop draws ~1000 short segments a frame. The colour
-      // shift across the weave is carried by per-line alpha instead.
-      ctx.strokeStyle = "rgba(104,116,92,.95)";
       ctx.lineCap = "round";
 
       var A = 0.5 * out * lift;
 
       if (kFibre > 0.001) {
-        var amp = 26 + 30 * kFibre;
-        var blur = coarse ? (kFibre > 0.6 ? 1 : 0) : (kFibre > 0.5 ? 2 : 1);
-        for (var i = 0; i < fib.length; i++) filament(fib[i], now, amp * fib[i].r, A * 0.85 * kFibre, blur);
+        // Fibres are few and long, so they can afford the gradient: ink at the
+        // edges warming to brand gold through the middle of the stage.
+        ctx.strokeStyle = threadGrad;
+        var amp = 24 + 26 * kFibre;
+        for (var i = 0; i < fib.length; i++) filament(fib[i], now, amp * (0.5 + fib[i].r), A * 1.15 * kFibre, !coarse);
       }
       if (kThread > 0.001) {
         // Three strands braiding around one spine.
+        // Three plies twisting around one spine: same phase, opposed offsets.
         for (var s = 0; s < 3; s++) {
-          filament({ a: s * 2.1, r: 0.22, s: 0.9, z: 0.8 + s * 0.1, o: s * 2.1 }, now, 16 * kThread, A * kThread, coarse ? 1 : 2);
+          filament({
+            f1: 4.2, p1: s * 2.09, f2: 9.4, p2: s * 2.09, f3: 18.1, p3: s * 2.09,
+            r: 0.06, s: 1.15, z: 0.72 + s * 0.09, u0: 0.02, u1: 0.98
+          }, now, 15 * kThread, A * 1.2 * kThread, !coarse);
         }
       }
       if (kFabric > 0.001) {
+        // A flat stroke for the weave: gradient strokes are re-evaluated per
+        // pixel and this loop draws ~1000 short segments a frame. The colour
+        // shift across the cloth is carried by per-line alpha instead.
+        ctx.strokeStyle = "rgba(104,116,92,.95)";
         var box = clothBox(kFabric);
         fabric(now, kFabric, A * 0.9 * kFabric, box);
         // A whisper of body behind the mesh: once the silhouette mask closes
@@ -478,4 +516,88 @@
   } else {
     reveals.forEach(function (el) { el.classList.add("in"); });
   }
+})();
+
+/* =========================================================================
+   NARRATIVE RAIL + SECTION DEPTH
+   A second, deliberately tiny module: it runs on any page carrying [data-rail]
+   and is independent of the hero engine above.
+
+   One rAF-throttled scroll handler drives everything, and every measurement it
+   needs is cached on load/resize — so the handler itself never reads layout and
+   never forces a reflow. It writes one transform on the rail, one class on the
+   active chapter, and one transform per in-view [data-parallax] element.
+   ========================================================================= */
+(function () {
+  "use strict";
+
+  var rail = document.querySelector("[data-rail]");
+  if (!rail) return;
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var fill = rail.querySelector(".rail-fill");
+  var marks = [].slice.call(rail.querySelectorAll("[data-anchor]")).map(function (li) {
+    return { li: li, el: document.getElementById(li.dataset.anchor), top: 0 };
+  }).filter(function (m) { return m.el; });
+
+  var para = reduced ? [] : [].slice.call(document.querySelectorAll("[data-parallax]")).map(function (el) {
+    return { el: el, k: parseFloat(el.dataset.parallax) || 0.15, top: 0, h: 0 };
+  });
+
+  var docSpan = 1, vh = 0, active = -1, ticking = false;
+
+  function measure() {
+    vh = window.innerHeight;
+    docSpan = Math.max(1, document.documentElement.scrollHeight - vh);
+    for (var i = 0; i < marks.length; i++) {
+      marks[i].top = marks[i].el.getBoundingClientRect().top + window.scrollY;
+    }
+    for (var j = 0; j < para.length; j++) {
+      var r = para[j].el.getBoundingClientRect();
+      para[j].top = r.top + window.scrollY;
+      para[j].h = r.height;
+      // Room to move: the image is oversized by the travel it will use, so the
+      // parallax can never expose an edge inside its frame.
+      para[j].el.style.willChange = "transform";
+      para[j].el.style.transform = "";
+      para[j].el.style.height = "calc(100% + " + Math.round(para[j].k * 200) + "px)";
+      para[j].el.style.marginTop = -Math.round(para[j].k * 100) + "px";
+    }
+  }
+
+  function frame() {
+    ticking = false;
+    var y = window.scrollY;
+
+    rail.style.setProperty("--rail", Math.max(0, Math.min(1, y / docSpan)).toFixed(4));
+
+    // The chapter you are in is the last one whose top has passed the upper
+    // third of the viewport — the point at which a section reads as "here".
+    var line = y + vh * 0.34, next = 0;
+    for (var i = 0; i < marks.length; i++) if (marks[i].top <= line) next = i;
+    if (next !== active) {
+      if (active > -1) marks[active].li.classList.remove("on");
+      marks[next].li.classList.add("on");
+      active = next;
+    }
+
+    for (var j = 0; j < para.length; j++) {
+      var p = para[j];
+      var rel = (y + vh - p.top) / (vh + p.h);       // 0 entering, 1 leaving
+      if (rel < -0.15 || rel > 1.15) continue;
+      p.el.style.transform = "translate3d(0," + ((rel - 0.5) * p.k * 150).toFixed(1) + "px,0)";
+    }
+  }
+
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", function () { measure(); onScroll(); }, { passive: true });
+  window.addEventListener("load", function () { measure(); onScroll(); });
+  measure();
+  onScroll();
 })();
